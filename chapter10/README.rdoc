@@ -276,16 +276,21 @@
   g. On the same page, enter a new valid password, to get redirected to the User
     show page.
 10. Setup heroku
-  a. In Gemfile add
-    group :production do
-      gem 'pg', '~> 0.18.2'
-      gem 'rails_12factor', '~> 0.0.3'
-    end
+  a. In Gemfile
+    i. Move gem 'sqlite3' to inside group :development
+    ii. Add
+      group :production do
+        gem 'pg', '~> 0.18.2'
+        gem 'rails_12factor', '~> 0.0.3'
+      end
   b. bundle install
   c. heroku login
   d. heroku keys:add
-  e. heroku create
-  f. git push heroku master
+  e. git init
+  f. git add .
+  g. git commit -am "Some message"
+  h. heroku create
+  i. git push heroku master
 11. Email in production
   a. In config/environments/production.rb add
     config.action_mailer.raise_delivery_errors = true
@@ -301,3 +306,4 @@
       :domain         => 'heroku.com',
       :enable_starttls_auto => true
     }
+  b. ...
