@@ -1,0 +1,205 @@
+1. Edit user
+  a. In users_controller.rb add
+    def edit
+      @user = User.find(params[:id])
+    end
+    def update
+      @user = User.find(params[:id])
+      if @user.update_attributes(user_params)
+        flash[:success] = "Profile updated"
+        redirect_to @user
+      else
+        render 'edit'
+      end
+    end
+  b. Create file views/users/edit.html.erb
+    <% provide(:title, "Edit user") %>
+    <h1>Update your profile</h1>
+    <div class="row">
+      <div class="col-md-6 col-md-offset-3">
+        <%= form_for(@user) do |f| %>
+          <%= render 'shared/error_messages' %>
+          <%= f.label :name %>
+          <%= f.text_field :name, class: 'form-control' %>
+          <%= f.label :email %>
+          <%= f.email_field :email, class: 'form-control' %>
+          <%= f.label :password %>
+          <%= f.password_field :password, class: 'form-control' %>
+          <%= f.label :password_confirmation, "Confirmation" %>
+          <%= f.password_field :password_confirmation, class: 'form-control' %>
+          <%= f.submit "Save changes", class: "btn btn-primary" %>
+        <% end %>
+        <div class="gravatar_edit">
+          <%= gravatar_for @user %>
+          <a href="http://gravatar.com/emails" target="_blank">change</a>
+        </div>
+      </div>
+    </div>
+  c. In _header.html.erb, change link_to "Settings" to
+    <li><%= link_to "Settings", edit_user_path(current_user) %></li>
+  d. In user.rb change
+    validates :password, presence: true, length: { minimum: 6 }, allow_nil: true
+  e. Click on Account - Profile to go to users link
+2. Require logged-in users
+  a. In users_controller.rb add
+    before_action :logged_in_user, only: [:edit, :update]
+    def logged_in_user
+      unless logged_in?
+        flash[:danger] = "Please log in."
+        redirect_to login_url
+      end
+    end
+  b. Log out, then try to access an edit page, like /users/2/edit to be
+    redirected to the login page
+3. Require the right user
+  a. In users_controller.rb add
+    before_action :correct_user,   only: [:edit, :update]
+    def correct_user
+      @user = User.find(params[:id])
+      redirect_to(root_url) unless current_user?(@user)
+    end
+  b. In sessions_helper.rb add
+    def current_user?(user)
+      user == current_user
+    end
+  c. Log in, then try to access the edit page of another user, like /users/4/edit
+    to be redirected to the root page
+4. Friendly forwarding: once logged in, a users will be redirected to the page
+  he tried to access before logging in.
+  a. In sessions_helper.rb add
+    def redirect_back_or(default)
+      redirect_to(session[:forwarding_url] || default)
+      session.delete(:forwarding_url)
+    end
+    def store_location
+      session[:forwarding_url] = request.url if request.get?
+    end
+  b. In users_controller.rb, in logged_in_user, before flash[:danger] add
+    store_location
+  c. In sessions_controller.rb in create, change redirect_to user to
+    redirect_back_or user
+  d. Log out, then try to access the edit page of the current user, to get
+    redirected to the login page. Login to get redirected to the edit page
+5. Index page
+  a. In users_controller.rb
+    i. update
+      before_action :logged_in_user, only: [:index, :edit, :update]
+    ii. Add
+      def index
+        @users = User.all
+      end
+  b. Create file views/users/index.html.erb
+    <% provide(:title, 'All users') %>
+    <h1>All users</h1>
+    <ul class="users">
+      <% @users.each do |user| %>
+        <li>
+          <%= gravatar_for user, size: 50 %>
+          <%= link_to user.name, user %>
+        </li>
+      <% end %>
+    </ul>
+  c. In custom.css.scss add
+    .users {
+      list-style: none;
+      margin: 0;
+      li {
+        overflow: auto;
+        padding: 10px 0;
+        border-bottom: 1px solid $gray-lighter;
+      }
+    }
+  d. In _header.html.erb update link_to "Users"
+    <li><%= link_to "Users", users_path %></li>
+  e. In users_helper.rb update gravatar_for:
+    def gravatar_for(user, options = { size: 80 })
+      gravatar_id = Digest::MD5::hexdigest(user.email.downcase)
+      size = options[:size]
+      gravatar_url = "https://secure.gravatar.com/avatar/#{gravatar_id}?s=#{size}"
+      image_tag(gravatar_url, alt: user.name, class: "gravatar")
+    end
+  f. Load the index page
+6. Generate lots of users
+  a. In Gemfile add
+    gem 'faker', '~> 1.4.3'
+  b. bundle install
+  c. In db/seeds.rb
+    User.create!(name:  "Example User",
+                 email: "example@railstutorial.org",
+                 password:              "foobar",
+                 password_confirmation: "foobar")
+    99.times do |n|
+      name  = Faker::Name.name
+      email = "example-#{n+1}@railstutorial.org"
+      password = "password"
+      User.create!(name:  name,
+                   email: email,
+                   password:              password,
+                   password_confirmation: password)
+    end
+  d. rake db:migrate:reset
+  e. rake db:seed
+  f. Restart server
+  g. Reload the index page
+7. Paginate index page
+  a. In Gemfile add
+    gem 'will_paginate', '~> 3.0.7'
+    gem 'bootstrap-will_paginate', '~> 0.0.10'
+  b. bundle install
+  c. Restart server
+  d. In index.html.erb add before and after <ul>
+    <%= will_paginate %>
+  e. In users_controller.rb, in index change
+    @users = User.paginate(page: params[:page])
+  f. Reload the index page
+8. Refactor
+  a. In index.html.erb change the ul to
+    <ul class="users">
+      <% @users.each do |user| %>
+        <%= render user %>
+      <% end %>
+    </ul>
+  b. Create file views/users/_user.html.erb
+    <li>
+      <%= gravatar_for user, size: 50 %>
+      <%= link_to user.name, user %>
+    </li>
+  c. In index.html.erb change the ul again to
+    <ul class="users">
+      <%= render @users %>
+    </ul>
+9. Delete users
+  a. rails generate migration add_admin_to_users admin:boolean
+  b. In db/migrate/[timestamp]_add_admin_to_users.rb, change
+    add_column :users, :admin, :boolean, default: false
+  c. rake db:migrate
+  d. In seeds.rb, update
+    User.create!(name:  "Example User",
+                 email: "example@railstutorial.org",
+                 password:              "foobar",
+                 password_confirmation: "foobar",
+                 admin: true)
+  e. rake db:migrate:reset
+  f. rake db:seed
+  g. Restart server
+  h. In _user.html.erb, after link_to user.name add
+    <% if current_user.admin? && !current_user?(user) %>
+      | <%= link_to "delete", user, method: :delete,
+                                    data: { confirm: "You sure?" } %>
+    <% end %>
+  i. In users_controller.rb
+    i. Update
+      before_action :logged_in_user, only: [:index, :edit, :update, :destroy]
+    ii. Add
+      before_action :admin_user,     only: :destroy
+      def destroy
+        User.find(params[:id]).destroy
+        flash[:success] = "User deleted"
+        redirect_to users_url
+      end
+      def admin_user
+        redirect_to(root_url) unless current_user.admin?
+      end
+  j. Log in as example-1@railstutorial.org/password, go to Users and see no
+    Delete link
+  k. Log in as example@railstutorial.org/foobar, go to Users and delete a user

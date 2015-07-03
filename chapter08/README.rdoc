@@ -1,0 +1,209 @@
+1. Setup login form
+  a. rails generate controller Sessions new
+  b. In routes.rb add
+    get    'login'   => 'sessions#new'
+    post   'login'   => 'sessions#create'
+    delete 'logout'  => 'sessions#destroy'
+  c. Convert views/sessions/new.html.erb to
+    <% provide(:title, "Log in") %>
+    <h1>Log in</h1>
+    <div class="row">
+      <div class="col-md-6 col-md-offset-3">
+        <%= form_for(:session, url: login_path) do |f| %>
+          <%= f.label :email %>
+          <%= f.email_field :email, class: 'form-control' %>
+          <%= f.label :password %>
+          <%= f.password_field :password, class: 'form-control' %>
+          <%= f.submit "Log in", class: "btn btn-primary" %>
+        <% end %>
+        <p>New user? <%= link_to "Sign up now!", signup_path %></p>
+      </div>
+    </div>
+  d. Go to /login
+2. Connect Session with login form
+  a. In sessions_controller.rb add
+    def create
+      render 'new'
+    end
+  b. Go to /sessions/new, to see the login form
+3. Handle invalid login
+  a. In sessions_controller.rb convert create to
+    def create
+      user = User.find_by(email: params[:session][:email].downcase)
+      if user && user.authenticate(params[:session][:password])
+        # Log the user in and redirect to the user's show page.
+      else
+        flash.now[:danger] = 'Invalid email/password combination'
+        render 'new'
+      end
+    end
+  b. Login with invalid username/password
+4. Handle successful login
+  a. In application_controller.rb add
+    include SessionsHelper
+  b. In app/helpers/sessions_helper.rb add
+    def log_in(user)
+      session[:user_id] = user.id
+    end
+  c. In sessions_controller.rb, convert inside the if block
+    if user && user.authenticate(params[:session][:password])
+      log_in user
+      redirect_to user
+  d. Login with valid username/password
+5. Setup navigation links
+  a. In sessions_helper.rb add
+    def current_user
+      @current_user ||= User.find_by(id: session[:user_id])
+    end
+    def logged_in?
+      !current_user.nil?
+    end
+  b. In _header.html.erb, change link_to "Log in" to
+    <% if logged_in? %>
+      <li><%= link_to "Users", '#' %></li>
+      <li class="dropdown">
+        <a href="#" class="dropdown-toggle" data-toggle="dropdown">
+          Account <b class="caret"></b>
+        </a>
+        <ul class="dropdown-menu">
+          <li><%= link_to "Profile", current_user %></li>
+          <li><%= link_to "Settings", '#' %></li>
+          <li class="divider"></li>
+          <li>
+            <%= link_to "Log out", logout_path, method: "delete" %>
+          </li>
+        </ul>
+      </li>
+    <% else %>
+      <li><%= link_to "Log in", login_path %></li>
+    <% end %>
+  c. In application.js add
+    //= require bootstrap
+  d. Reload to see:
+    i. Log in link removed
+    ii. Dummy Users link
+    iii. Drop-down link Account, with Profile, Settings and Log out
+  e. Go incognito to see the Log in link
+6. Setup test fixture
+  a. Convert test/fixtures/users.yml to
+    michael:
+      name: Michael Example
+      email: michael@example.com
+      password_digest: <%= User.digest('password') %>
+  b. In user.rb add
+    def User.digest(string)
+      cost = ActiveModel::SecurePassword.min_cost ? BCrypt::Engine::MIN_COST : BCrypt::Engine.cost
+      BCrypt::Password.create(string, cost: cost)
+    end
+  c. With this setup, we can pull User records like this
+    user = users(:michael)
+7. Login upon signup
+  a. In users_controller.rb
+    if @user.save
+      log_in @user
+      flash[:success] = "Welcome to the Sample App!"
+      redirect_to @user
+  b. Sign up a new user and verify that you're logged in upon signing up.
+8. Logging out
+  a. In sessions_helper.rb add
+    def log_out
+      session.delete(:user_id)
+      @current_user = nil
+    end
+  b. In sessions_controller.rb add
+    def destroy
+      log_out
+      redirect_to root_url
+    end
+  c. Click Log out
+9. Remember Me
+  a. rails generate migration add_remember_digest_to_users remember_digest:string
+  b. rake db:migrate
+  c. Restart server
+  d. In user.rb add
+    attr_accessor :remember_token
+    def User.new_token
+      SecureRandom.urlsafe_base64
+    end
+    def remember
+      self.remember_token = User.new_token
+      update_attribute(:remember_digest, User.digest(remember_token))
+    end
+    def authenticated?(remember_token)
+      BCrypt::Password.new(remember_digest).is_password?(remember_token)
+    end
+  e. In sessions_controller.rb, add after log_in user
+    remember user
+  f. In sessions_helper.rb
+    i. Add
+      def remember(user)
+        user.remember
+        cookies.permanent.signed[:user_id] = user.id
+        cookies.permanent[:remember_token] = user.remember_token
+      end
+    ii. Convert current_user
+      def current_user
+        if (user_id = session[:user_id])
+          @current_user ||= User.find_by(id: user_id)
+        elsif (user_id = cookies.signed[:user_id])
+          user = User.find_by(id: user_id)
+          if user && user.authenticated?(cookies[:remember_token])
+            log_in user
+            @current_user = user
+          end
+        end
+      end
+  g. Log in, close browser, then go back to the app to see user still logged in
+10. Forget user
+  a. In user.rb add
+    def forget
+      update_attribute(:remember_digest, nil)
+    end
+  b. In sessions_helper
+    i. Add
+      def forget(user)
+        user.forget
+        cookies.delete(:user_id)
+        cookies.delete(:remember_token)
+      end
+    ii. In log_out, add before session.delete
+      forget(current_user)
+  c. Log out the current user
+11. Bug 1
+  a. Multiple windows/tabs of the same browser type are open to the site. User
+    logs out in one window. Since the Log Out link is still active in the 2nd
+    window, user may try to log out in the 2nd window.
+  b. In sessions_controller.rb, change log_out to
+    log_out if logged_in?
+12. Bug 2
+  a. Multiple browsers (Chrome and Firefox) are open to the side. User logs out
+    in out browser (thereby deleting remember_digest), then tries to log out
+    again in 2nd browser which tries to access an already deleted remember_digest
+  b. In user.rb, convert authenticated? to
+    if remember_digest.nil?
+      false
+    else
+      BCrypt::Password.new(remember_digest).is_password?(remember_token)
+    end
+13 "Remember Me" checkbox
+  a. In views/sessions/new.html.erb, after f.password_field add
+    <%= f.label :remember_me, class: "checkbox inline" do %>
+      <%= f.check_box :remember_me %>
+      <span>Remember me on this computer</span>
+    <% end %>
+  b. In custom.css.scss add
+    .checkbox {
+      margin-top: -10px;
+      margin-bottom: 10px;
+      span {
+        margin-left: 20px;
+        font-weight: normal;
+      }
+    }
+    #session_remember_me {
+      width: auto;
+      margin-left: 0;
+    }
+  c. In sessions_controller.rb in create, convert remember user to
+    params[:session][:remember_me] == '1' ? remember(user) : forget(user)
+  d. Load the Log In page and test the "Remember me" feature

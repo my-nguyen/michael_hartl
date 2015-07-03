@@ -1,0 +1,19 @@
+1. Generate User Model
+  a. rails generate model User name:string email:string
+  b. In user.rb
+    before_save { self.email = email.downcase }
+    validates :name,  presence: true, length: { maximum: 50 }
+    validates :email, presence: true, length: { maximum: 255 },
+                      format: { with: /\A[\w+\-.]+@[a-z\d\-.]+\.[a-z]+\z/i },
+                      uniqueness: { case_sensitive: false }
+  c. rails generate migration add_index_to_users_email
+  d. rake db:migrate
+2. Add a password
+  a. rails generate migration add_password_digest_to_users password_digest:string
+  b. rake db:migrate
+  c. In Gemfile
+    gem 'bcrypt', '~> 3.1.10'
+  d. bundle install
+  e. In user.rb add
+    has_secure_password
+    validates :password, presence: true, length: { minimum: 6 }

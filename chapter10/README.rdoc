@@ -1,0 +1,303 @@
+1. Setup account activation resource
+  a. rails generate controller AccountActivations
+  b. In routes.rb add
+    resources :account_activations, only: [:edit]
+  c. rails generate migration add_activation_to_users activation_digest:string activated:boolean activated_at:datetime
+  d. In db/migrate/[timestamp]_add_activation_to_users.rb, change
+    add_column :users, :activated, :boolean, default: false
+  e. rake db:migrate
+  f. In user.rb add
+    attr_accessor :remember_token, :activation_token
+    before_create :create_activation_digest
+    private
+    def create_activation_digest
+      self.activation_token  = User.new_token
+      self.activation_digest = User.digest(activation_token)
+    end
+  g. Convert db/seeds.rb to
+    User.create!(name:  "Example User",
+             email: "example@railstutorial.org",
+             password:              "foobar",
+             password_confirmation: "foobar",
+             admin:     true,
+             activated: true,
+             activated_at: Time.zone.now)
+    99.times do |n|
+      name  = Faker::Name.name
+      email = "example-#{n+1}@railstutorial.org"
+      password = "password"
+      User.create!(name:  name,
+                  email: email,
+                  password:              password,
+                  password_confirmation: password,
+                  activated: true,
+                  activated_at: Time.zone.now)
+    end
+  h. rake db:migrate:reset
+  i. rake db:seed
+2. Setup account activation mailer method
+  a. rails generate mailer UserMailer account_activation password_reset
+  b. In app/mailers/application_mailer.rb change default from
+    default from: "noreply@example.com"
+  c. In app/mailers/user_mailer.rb change account_activation to
+    def account_activation(user)
+      @user = user
+      mail to: user.email, subject: "Account activation"
+    end
+  d. Convert views/user_mailer/account_activation.text.erb to
+    Hi <%= @user.name %>,
+
+    Welcome to the Sample App! Click on the link below to activate your account:
+
+    <%= edit_account_activation_url(@user.activation_token, email: @user.email) %>
+  e. Convert views/user_mailer/account_activation.html.erb to
+    <h1>Sample App</h1>
+    <p>Hi <%= @user.name %>,</p>
+    <p>Welcome to the Sample App! Click on the link below to activate your account:</p>
+    <%= link_to "Activate", edit_account_activation_url(@user.activation_token, email: @user.email) %>
+  f. In config/environments/development.rb, change config.action_mailer.raise_delivery_errors
+      config.action_mailer.raise_delivery_errors = true
+      config.action_mailer.delivery_method = :test
+      host = 'localhost:3000'
+      config.action_mailer.default_url_options = { host: host }
+  g. In test/mailers/previews/user_mailer_preview.rb, convert def account_activation
+    def account_activation
+      user = User.first
+      user.activation_token = User.new_token
+      UserMailer.account_activation(user)
+    end
+  h. Go to /rails/mailers/user_mailer/account_activation to view the Account
+    Activation message, in both html and text formats
+  i. In users_controller.rb, in create, change:
+    if @user.save
+      UserMailer.account_activation(@user).deliver_now
+      flash[:info] = "Please check your email to activate your account."
+      redirect_to root_url
+  j. Sign up a new user, verify that:
+    i. You'll get redirected to the home page
+    ii. There's a message to email to activate account.
+    iii. In log/development.log, search for "account activation" to find the email
+3. Activate the account
+  a. In user.rb, convert def authenticated? to
+    def authenticated?(attribute, token)
+      digest = send("#{attribute}_digest")
+      return false if digest.nil?
+      BCrypt::Password.new(digest).is_password?(token)
+    end
+  b. In sessions_helper, in def current_user, change the if condition to
+    if user && user.authenticated?(:remember, cookies[:remember_token])
+  c. In account_activations_controller.rb add
+    def edit
+      user = User.find_by(email: params[:email])
+      if user && !user.activated? && user.authenticated?(:activation, params[:id])
+        user.update_attribute(:activated,    true)
+        user.update_attribute(:activated_at, Time.zone.now)
+        log_in user
+        flash[:success] = "Account activated!"
+        redirect_to user
+      else
+        flash[:danger] = "Invalid activation link"
+        redirect_to root_url
+      end
+    end
+  d. In development.log, find the "account activation" email, copy the activation
+    URL and paste it to a browser window, to get redirected to the User show page
+4. Prevent unactivated users from logging in
+  a. In sessions_controller.rb, in def create, replace the if clause with
+    if user && user.authenticate(params[:session][:password])
+      if user.activated?
+        log_in user
+        params[:session][:remember_me] == '1' ? remember(user) : forget(user)
+        redirect_back_or user
+      else
+        message  = "Account not activated. "
+        message += "Check your email for the activation link."
+        flash[:warning] = message
+        redirect_to root_url
+      end
+  b. Sign up a new user, then without activation (as above), try to log in to
+    see a reminder to activate first.
+5. Refactor
+  a. In user.rb add
+    def activate
+      update_attribute(:activated,    true)
+      update_attribute(:activated_at, Time.zone.now)
+    end
+    def send_activation_email
+      UserMailer.account_activation(self).deliver_now
+    end
+  b. In users_controller.rb, in def create, replace UserMailer.account_activation with
+    @user.send_activation_email
+  c. In account_activations_controller.rb, in def create, replace the 2 lines of
+  user.update_attribute with
+    user.activate
+6. Password reset resource
+  a. rails generate controller PasswordResets new edit
+  b. In routes.rb add
+    resources :password_resets,     only: [:new, :create, :edit, :update]
+  c. In views/sessions/new.html.erb, before f.password_field add
+    <%= link_to "(forgot password)", new_password_reset_path %>
+  d. Reload the Login page to see the "forgot password" link
+  e. rails generate migration add_reset_to_users reset_digest:string reset_sent_at:datetime
+  f. rake db:migrate
+7. Password reset controller and form
+  a. Convert views/password_resets/new.html.erb to
+    <% provide(:title, "Forgot password") %>
+    <h1>Forgot password</h1>
+    <div class="row">
+      <div class="col-md-6 col-md-offset-3">
+        <%= form_for(:password_reset, url: password_resets_path) do |f| %>
+          <%= f.label :email %>
+          <%= f.email_field :email, class: 'form-control' %>
+          <%= f.submit "Submit", class: "btn btn-primary" %>
+        <% end %>
+      </div>
+    </div>
+  b. Go to /password_resets/new to view the page
+  c. In password_resets_controller.rb add
+    def create
+      @user = User.find_by(email: params[:password_reset][:email].downcase)
+      if @user
+        @user.create_reset_digest
+        @user.send_password_reset_email
+        flash[:info] = "Email sent with password reset instructions"
+        redirect_to root_url
+      else
+        flash.now[:danger] = "Email address not found"
+        render 'new'
+      end
+    end
+  d. In user.rb
+    i. Update attr_accessor
+      attr_accessor :remember_token, :activation_token, :reset_token
+    ii. Add
+      def create_reset_digest
+        self.reset_token = User.new_token
+        update_attribute(:reset_digest,  User.digest(reset_token))
+        update_attribute(:reset_sent_at, Time.zone.now)
+      end
+      def send_password_reset_email
+        UserMailer.password_reset(self).deliver_now
+      end
+  e. Go to /password_resets/new, enter a non-existent email, to be redirected to
+    /password_resets with a message that email address doesn't exist.
+8. Password reset mailer method
+  a. In mailers/user_mailer.rb convert def password_reset to
+    def password_reset(user)
+      @user = user
+      mail to: user.email, subject: "Password reset"
+    end
+  b. Convert views/user_mailer/password_reset.text.erb to
+    To reset your password click the link below:
+    <%= edit_password_reset_url(@user.reset_token, email: @user.email) %>
+    This link will expire in two hours.
+    If you did not request your password to be reset, please ignore this email and
+    your password will stay as it is.
+  c. Convert views/user_mailer/password_reset.html.erb to
+    <h1>Password reset</h1>
+    <p>To reset your password click the link below:</p>
+    <%= link_to "Reset password", edit_password_reset_url(@user.reset_token, email: @user.email) %>
+    <p>This link will expire in two hours.</p>
+    <p>
+      If you did not request your password to be reset, please ignore this email and
+      your password will stay as it is.
+    </p>
+  d. In test/mailers/previews/user_mailer_preview.rb, convert def password_reset
+    def password_reset
+      user = User.first
+      user.reset_token = User.new_token
+      UserMailer.password_reset(user)
+    end
+  e. Go to /rails/mailers/user_mailer/password_reset to view the Password Reset
+    message, in both html and text formats.
+  f. Go to /password_resets/new, enter a valid email, to be redirected to the
+    root page, with a message that a password reset email has been sent.
+  g. In development.log, look for the "password reset" email
+9. Reset password
+  a. Convert views/password_resets/edit.html.erb to
+    <% provide(:title, 'Reset password') %>
+    <h1>Reset password</h1>
+    <div class="row">
+      <div class="col-md-6 col-md-offset-3">
+        <%= form_for(@user, url: password_reset_path(params[:id])) do |f| %>
+          <%= render 'shared/error_messages' %>
+          <%= hidden_field_tag :email, @user.email %>
+          <%= f.label :password %>
+          <%= f.password_field :password, class: 'form-control' %>
+          <%= f.label :password_confirmation, "Confirmation" %>
+          <%= f.password_field :password_confirmation, class: 'form-control' %>
+          <%= f.submit "Update password", class: "btn btn-primary" %>
+        <% end %>
+      </div>
+    </div>
+  b. In password_resets_controller, add
+    before_action :get_user,   only: [:edit, :update]
+    before_action :valid_user, only: [:edit, :update]
+    private
+    def get_user
+      @user = User.find_by(email: params[:email])
+    end
+    def valid_user
+      unless (@user && @user.activated? && @user.authenticated?(:reset, params[:id]))
+        redirect_to root_url
+      end
+    end
+  c. In development.log, copy the password reset URL and paste it to a browser,
+    to get redirected to the Password Reset page.
+  d. In password_resets_controller.rb add
+    before_action :check_expiration, only: [:edit, :update]
+    def update
+      if params[:user][:password].empty?
+        flash.now[:danger] = "Password can't be empty"
+        render 'edit'
+      elsif @user.update_attributes(user_params)
+        log_in @user
+        flash[:success] = "Password has been reset."
+        redirect_to @user
+      else
+        render 'edit'
+      end
+    end
+    private
+    def user_params
+      params.require(:user).permit(:password, :password_confirmation)
+    end
+    def check_expiration
+      if @user.password_reset_expired?
+        flash[:danger] = "Password reset has expired."
+        redirect_to new_password_reset_url
+      end
+    end
+  e. In user.rb add
+    def password_reset_expired?
+      reset_sent_at < 2.hours.ago
+    end
+  f. In the Password Reset page, enter a new invalid password to see error message
+  g. On the same page, enter a new valid password, to get redirected to the User
+    show page.
+10. Setup heroku
+  a. In Gemfile add
+    group :production do
+      gem 'pg', '~> 0.18.2'
+      gem 'rails_12factor', '~> 0.0.3'
+    end
+  b. bundle install
+  c. heroku login
+  d. heroku keys:add
+  e. heroku create
+  f. git push heroku master
+11. Email in production
+  a. In config/environments/production.rb add
+    config.action_mailer.raise_delivery_errors = true
+    config.action_mailer.delivery_method = :smtp
+    host = '<your heroku app>.herokuapp.com'
+    config.action_mailer.default_url_options = { host: host }
+    ActionMailer::Base.smtp_settings = {
+      :address        => 'smtp.sendgrid.net',
+      :port           => '587',
+      :authentication => :plain,
+      :user_name      => ENV['SENDGRID_USERNAME'],
+      :password       => ENV['SENDGRID_PASSWORD'],
+      :domain         => 'heroku.com',
+      :enable_starttls_auto => true
+    }
