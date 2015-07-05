@@ -12,7 +12,7 @@
         render 'edit'
       end
     end
-  b. Create file views/users/edit.html.erb
+  b. Create file users/edit.html.erb
     <% provide(:title, "Edit user") %>
     <h1>Update your profile</h1>
     <div class="row">
@@ -35,11 +35,11 @@
         </div>
       </div>
     </div>
-  c. In _header.html.erb, change link_to "Settings" to
+  c. In layouts/_header.html.erb, change link_to "Settings" to
     <li><%= link_to "Settings", edit_user_path(current_user) %></li>
-  d. In user.rb change
+  d. In user.rb update validates :password
     validates :password, presence: true, length: { minimum: 6 }, allow_nil: true
-  e. Click on Account - Profile to go to users link
+  e. Click on Account - Settings to go to User edit page
 2. Require logged-in users
   a. In users_controller.rb add
     before_action :logged_in_user, only: [:edit, :update]
@@ -49,9 +49,9 @@
         redirect_to login_url
       end
     end
-  b. Log out, then try to access an edit page, like /users/2/edit to be
+  b. Go incognito, try to access an edit page, like /users/2/edit to be
     redirected to the login page
-3. Require the right user
+3. Require the right logged-in user
   a. In users_controller.rb add
     before_action :correct_user,   only: [:edit, :update]
     def correct_user
@@ -74,9 +74,9 @@
     def store_location
       session[:forwarding_url] = request.url if request.get?
     end
-  b. In users_controller.rb, in logged_in_user, before flash[:danger] add
+  b. In users_controller.rb, def logged_in_user, before flash[:danger] add
     store_location
-  c. In sessions_controller.rb in create, change redirect_to user to
+  c. In sessions_controller.rb def create, change redirect_to user to
     redirect_back_or user
   d. Log out, then try to access the edit page of the current user, to get
     redirected to the login page. Login to get redirected to the edit page
@@ -88,7 +88,7 @@
       def index
         @users = User.all
       end
-  b. Create file views/users/index.html.erb
+  b. Create file users/index.html.erb
     <% provide(:title, 'All users') %>
     <h1>All users</h1>
     <ul class="users">
@@ -109,16 +109,16 @@
         border-bottom: 1px solid $gray-lighter;
       }
     }
-  d. In _header.html.erb update link_to "Users"
+  d. In layouts/_header.html.erb update link_to "Users"
     <li><%= link_to "Users", users_path %></li>
-  e. In users_helper.rb update gravatar_for:
+  e. In users_helper.rb update def gravatar_for:
     def gravatar_for(user, options = { size: 80 })
       gravatar_id = Digest::MD5::hexdigest(user.email.downcase)
       size = options[:size]
       gravatar_url = "https://secure.gravatar.com/avatar/#{gravatar_id}?s=#{size}"
       image_tag(gravatar_url, alt: user.name, class: "gravatar")
     end
-  f. Load the index page
+  f. Click on Users to load the index page
 6. Generate lots of users
   a. In Gemfile add
     gem 'faker', '~> 1.4.3'
@@ -147,33 +147,33 @@
     gem 'bootstrap-will_paginate', '~> 0.0.10'
   b. bundle install
   c. Restart server
-  d. In index.html.erb add before and after <ul>
+  d. In users/index.html.erb add before and after <ul> block
     <%= will_paginate %>
-  e. In users_controller.rb, in index change
+  e. In users_controller.rb, def index change
     @users = User.paginate(page: params[:page])
   f. Reload the index page
 8. Refactor
-  a. In index.html.erb change the ul to
+  a. In users/index.html.erb change the <ul> block to
     <ul class="users">
       <% @users.each do |user| %>
         <%= render user %>
       <% end %>
     </ul>
-  b. Create file views/users/_user.html.erb
+  b. Create file users/_user.html.erb
     <li>
       <%= gravatar_for user, size: 50 %>
       <%= link_to user.name, user %>
     </li>
-  c. In index.html.erb change the ul again to
+  c. In users/index.html.erb change the <ul> block again to
     <ul class="users">
       <%= render @users %>
     </ul>
 9. Delete users
   a. rails generate migration add_admin_to_users admin:boolean
-  b. In db/migrate/[timestamp]_add_admin_to_users.rb, change
+  b. In db/migrate/[timestamp]_add_admin_to_users.rb def change, update
     add_column :users, :admin, :boolean, default: false
   c. rake db:migrate
-  d. In seeds.rb, update
+  d. In seeds.rb, update the first User.create! to
     User.create!(name:  "Example User",
                  email: "example@railstutorial.org",
                  password:              "foobar",

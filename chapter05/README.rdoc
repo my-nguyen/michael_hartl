@@ -1,5 +1,5 @@
 1. Load the home page
-2. Create at top of page the stubbed links: sample app, Home, Help, and Log in.
+2. Create links at top of page: sample app, Home, Help, and Log in.
   a. Convert application.html.erb to
     <!DOCTYPE html>
     <html>
@@ -43,7 +43,7 @@
     end
   c. Reload home page.
 3. Add rails icon
-  a. Change home.html.erb to
+  a. Convert static_pages/home.html.erb to
     <div class="center jumbotron">
       <h1>Welcome to the Sample App</h1>
       <h2>
@@ -59,7 +59,7 @@
     gem 'bootstrap-sass', '~> 3.3.5.1'
   b. bundle install
   c. Restart server
-  d. Create app/assets/stylesheets/custom.css.scss
+  d. Create assets/stylesheets/custom.css.scss
     @import "bootstrap-sprockets";
     @import "bootstrap";
   e. Reload home page
@@ -288,14 +288,14 @@
   b. In static_pages_controller.rb add
     def contact
     end
-  c. Add file static_pages/contact.html.erb
+  c. Create file static_pages/contact.html.erb
     <% provide(:title, 'Contact') %>
     <h1>Contact</h1>
     <p>
       Contact the Ruby on Rails Tutorial about the sample app at the
       <a href="http://www.railstutorial.org/#contact">contact page</a>.
     </p>
-  d. Load Contact page: /static_pages/contact
+  d. Go to /static_pages/contact
 13. Change the routes
   a. In routes.rb change all existing routes to
     root             'static_pages#home'
@@ -304,7 +304,7 @@
     get 'contact' => 'static_pages#contact'
   b. Go to /, /help, /about, /contact
 14. Use named routes
-  a. Change _header.html.erb to
+  a. Convert _header.html.erb to
     <header class="navbar navbar-fixed-top navbar-inverse">
       <div class="container">
         <%= link_to "sample app", root_path, id: "logo" %>
@@ -317,7 +317,7 @@
         </nav>
       </div>
     </header>
-  b. Change _footer.html.erb to
+  b. Convert _footer.html.erb to
     <footer class="footer">
       <small>
         The <a href="http://www.railstutorial.org/">Ruby on Rails Tutorial</a>
